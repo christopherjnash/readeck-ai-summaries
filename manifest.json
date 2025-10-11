@@ -8,15 +8,25 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "permissions": ["storage", "scripting", "activeTab"],
-  "host_permissions": ["https://api.openai.com/*"],
+  "permissions": ["storage", "scripting"],
+  "host_permissions": [
+    "https://readeck.com/*",
+    "https://*.readeck.com/*",
+    "https://readeck.*/*",
+    "https://readeck.*.*/*"
+  ],
   "background": {
     "service_worker": "background.js",
     "type": "module"
   },
   "content_scripts": [
     {
-      "matches": ["https://*/bookmarks/*", "http://*/bookmarks/*"],
+      "matches": [
+        "https://readeck.com/bookmarks/*",
+        "https://*.readeck.com/bookmarks/*",
+        "https://readeck.*/*bookmarks/*",
+        "https://readeck.*.*/*bookmarks/*"
+      ],
       "js": ["content.js"],
       "run_at": "document_idle"
     }
@@ -27,5 +37,7 @@
     "default_title": "Readeck AI Summaries"
   },
   "minimum_chrome_version": "116",
-  "offline_enabled": false
+  "offline_enabled": false,
+  "homepage_url": "https://github.com/christopherjnash/readeck-ai-summaries/",
+  "license": "https://github.com/christopherjnash/readeck-ai-summaries/blob/main/LICENSE"
 }
