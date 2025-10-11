@@ -5,6 +5,7 @@
 */
 
 // content.js — Readeck AI Summaries
+
 (function() {
   const STATE = { injecting: false };
 
