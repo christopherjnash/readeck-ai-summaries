@@ -8,16 +8,22 @@
   const els = {
     key: document.getElementById("key"),
     model: document.getElementById("model"),
+    length: document.getElementById("length"),
     save: document.getElementById("save"),
     clear: document.getElementById("clear")
   };
 
   // Load saved values
   chrome.storage.local.get(
-    { openai_api_key: "", openai_model: "gpt-4o-mini" },
+    {
+      openai_api_key: "",
+      openai_model: "gpt-4o-mini",
+      max_summary_length: "medium"
+    },
     cfg => {
       els.key.value = cfg.openai_api_key || "";
       els.model.value = cfg.openai_model || "gpt-4o-mini";
+      els.length.value = cfg.max_summary_length || "medium";
     }
   );
 
@@ -25,7 +31,12 @@
   els.save.addEventListener("click", async () => {
     const key = els.key.value.trim();
     const model = els.model.value;
-    await chrome.storage.local.set({ openai_api_key: key, openai_model: model });
+    const length = els.length.value;
+    await chrome.storage.local.set({
+      openai_api_key: key,
+      openai_model: model,
+      max_summary_length: length
+    });
     toast("✅ Saved successfully!");
   });
 

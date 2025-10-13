@@ -312,7 +312,7 @@
 
     try {
       btn.disabled = true;
-      btn.textContent = "Summarizing…";
+      btn.textContent = "Request in progress...";
       const res = await chrome.runtime.sendMessage({
         type: "SUMMARIZE",
         payload: { title, text, style: "concise", bullets: false }

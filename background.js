@@ -1,5 +1,5 @@
-// background.js (MV3 service worker)
-const DEFAULT_MODEL = "gpt-4o-mini";
+// background.js
+const DEFAULT_MODEL = "gpt-5-nano";
 
 // Simple char-based chunking to keep prompts manageable
 function chunkText(s, max = 16000) {
@@ -9,43 +9,151 @@ function chunkText(s, max = 16000) {
 }
 
 async function loadConfig() {
-  const { openai_api_key, openai_model } = await chrome.storage.local.get({
+  const { openai_api_key, openai_model, max_summary_length } = await chrome.storage.local.get({
     openai_api_key: "",
-    openai_model: DEFAULT_MODEL
+    openai_model: DEFAULT_MODEL,
+    max_summary_length: "medium"
   });
-  return { apiKey: openai_api_key, model: openai_model || DEFAULT_MODEL };
+  return {
+    apiKey: openai_api_key,
+    model: openai_model || DEFAULT_MODEL,
+    length: max_summary_length || "medium"
+  };
 }
 
-async function summarizeBlock({ apiKey, model, title, text, style = "concise", bullets = false }) {
+// Remove Markdown formatting
+function stripMarkdown(text) {
+  if (!text) return "";
+  return text
+    // Bold and italics
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/\*(.*?)\*/g, "$1")
+    // Inline code
+    .replace(/`([^`]+)`/g, "$1")
+    // Headings
+    .replace(/^#+\s*/gm, "")
+    // Links [text](url)
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    // Blockquotes
+    .replace(/^>\s*/gm, "")
+    // Horizontal rules or stray underscores
+    .replace(/_{3,}|-{3,}/g, "")
+    // Trim whitespace
+    .trim();
+}
+
+async function summarizeBlock({
+  apiKey,
+  model,
+  title,
+  text,
+  style = "concise",
+  bullets = false,
+  length = "medium"
+}) {
   const goal   = style === "detailed" ? "Detailed" : "Concise";
   const format = bullets ? "Bullet points" : "Short paragraphs";
   const system = `You are an expert summarizer. ${goal} summary. ${format}. Avoid fluff; keep key facts and context.`;
   const user   = `${title ? `Title: ${title}\n\n` : ""}Article:\n${text}`;
 
-  const r = await fetch("https://api.openai.com/v1/chat/completions", {
+  const isNano = model.includes("gpt-5-nano");
+
+  // --- Dynamic token scaling ---
+  const lengthScale = { short: 500, medium: 1200, long: 2500 };
+  const tokenLimit = lengthScale[length] || 1200;
+
+  // --- Build API request body ---
+  const body = isNano
+    ? {
+        model,
+        input: [
+          { role: "system", content: system },
+          { role: "user", content: user }
+        ],
+        max_output_tokens: tokenLimit
+      }
+    : {
+        model,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user }
+        ],
+        temperature: 0.2,
+        max_tokens: tokenLimit
+      };
+
+  const endpoint = isNano
+    ? "https://api.openai.com/v1/responses"
+    : "https://api.openai.com/v1/chat/completions";
+
+  const r = await fetch(endpoint, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: system },
-        { role: "user",   content: user }
-      ],
-      temperature: 0.2,
-      max_tokens: 600
-    })
+    body: JSON.stringify(body)
   });
 
   if (!r.ok) {
-    const body = await r.text().catch(() => "");
-    throw new Error(`OpenAI HTTP ${r.status} ${r.statusText} – ${body}`);
+    const errText = await r.text().catch(() => "");
+    throw new Error(`OpenAI HTTP ${r.status} ${r.statusText} – ${errText}`);
   }
+
   const data = await r.json();
-  const content = data?.choices?.[0]?.message?.content?.trim() || "";
+
+  // --- Universal extraction logic ---
+  let content = "";
+  if (isNano) {
+    const allText = [];
+
+    // 1️⃣ Collect from any nested output content
+    if (Array.isArray(data.output)) {
+      for (const o of data.output) {
+        if (Array.isArray(o.content)) {
+          for (const c of o.content) {
+            if (c.type?.includes("text") && c.text) {
+              allText.push(c.text.trim());
+            }
+          }
+        }
+      }
+    }
+
+    // 2️⃣ Use output_text if provided (often appears for incomplete responses)
+    if (data.output_text && typeof data.output_text === "string") {
+      allText.push(data.output_text.trim());
+    }
+
+    // 3️⃣ Merge and trim
+    content = allText.join("\n\n").trim();
+  } else {
+    content = data?.choices?.[0]?.message?.content?.trim?.() || "";
+  }
+
   const usage = data?.usage || {};
+
+  // --- Debug logging ---
+  console.group("🧠 OpenAI Debug");
+  console.log("Model:", model);
+  console.log("Status:", data.status);
+  console.log("Raw data:", data);
+  console.log("Extracted content:", content);
+  console.log("Usage:", usage);
+  console.groupEnd();
+
+  // --- Handle incomplete or empty content ---
+  if (!content) {
+    if (data.status === "incomplete") {
+      content = "[Warning: response incomplete – partial data returned. Try longer token limit.]";
+    } else {
+      content = "[Warning: no summary text returned – check console for raw data.]";
+    }
+  }
+
+  // --- Markdown cleanup ---
+  content = stripMarkdown(content);
+
   return { content, usage };
 }
 
@@ -60,60 +168,51 @@ async function summarizeFull({ title, text, style, bullets }) {
   for (const p of parts) {
     const { content, usage } = await summarizeBlock({ apiKey, model, title, text: p, style, bullets });
     partials.push(content);
-    tokensIn  += usage?.prompt_tokens      || 0;
-    tokensOut += usage?.completion_tokens  || 0;
+    tokensIn  += usage?.prompt_tokens || usage?.input_tokens || 0;
+    tokensOut += usage?.completion_tokens || usage?.output_tokens || 0;
   }
 
   let final = partials.join("\n\n");
   if (partials.length > 1) {
-    // Merge pass (summarize the summaries)
     const { content, usage } = await summarizeBlock({
       apiKey, model, title,
       text: final, style, bullets
     });
     final = content;
-    tokensIn  += usage?.prompt_tokens     || 0;
-    tokensOut += usage?.completion_tokens || 0;
+    tokensIn  += usage?.prompt_tokens || usage?.input_tokens || 0;
+    tokensOut += usage?.completion_tokens || usage?.output_tokens || 0;
   }
 
   return { summary: final, model, chunks: parts.length, tokensIn, tokensOut };
 }
 
-// Message bridge: content.js → background.js
+// Message bridge
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     try {
-      if (msg?.type === "PING") {
-        sendResponse({ ok: true });
-        return;
-      }
+      if (msg?.type === "PING") return sendResponse({ ok: true });
       if (msg?.type === "GET_CONFIG") {
         const { apiKey, model } = await loadConfig();
-        sendResponse({ ok: true, hasKey: !!apiKey, model });
-        return;
+        return sendResponse({ ok: true, hasKey: !!apiKey, model });
       }
       if (msg?.type === "SET_CONFIG") {
         await chrome.storage.local.set({
           openai_api_key: msg.apiKey || "",
           openai_model: msg.model || DEFAULT_MODEL
         });
-        sendResponse({ ok: true });
-        return;
+        return sendResponse({ ok: true });
       }
       if (msg?.type === "SUMMARIZE") {
         const { title, text, style, bullets } = msg.payload || {};
         const result = await summarizeFull({ title, text, style, bullets });
-        sendResponse({ ok: true, ...result });
-        return;
+        return sendResponse({ ok: true, ...result });
       }
-
       sendResponse({ ok: false, error: "Unknown message type" });
     } catch (err) {
+      console.error("❌ summarize error:", err);
       sendResponse({ ok: false, error: String(err?.message || err) });
     }
   })();
-
-  // Keep the channel open for async response
   return true;
 });
 

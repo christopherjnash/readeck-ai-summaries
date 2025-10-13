@@ -150,8 +150,17 @@
 
     <label for="model">Model</label>
     <select id="model">
-      <option value="gpt-4o-mini">gpt-4o-mini (fast, inexpensive)</option>
-      <option value="gpt-4o">gpt-4o (higher quality)</option>
+      <option value="gpt-5-nano" selected>gpt-5-nano</option>
+      <option value="gpt-5-mini">gpt-5-mini</option>
+      <option value="gpt-4o-mini">gpt-4o-mini</option>
+      <option value="gpt-4o">gpt-4o</option>
+    </select>
+
+    <label for="length">Maximum Summary Length</label>
+    <select id="length">
+      <option value="short">Short (≈ 500 tokens)</option>
+      <option value="medium" selected>Medium (≈ 1200 tokens)</option>
+      <option value="long">Long (≈ 2500 tokens)</option>
     </select>
 
     <div class="actions">
