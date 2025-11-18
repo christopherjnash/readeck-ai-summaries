@@ -331,10 +331,12 @@
   function renderSummary(data, box) {
     const summary = (data && data.summary) ? data.summary.trim() : "";
     const meta = [];
-    if (data?.model) meta.push(data.model);
-    if (data?.chunks) meta.push(`${data.chunks} chunk${data.chunks > 1 ? "s" : ""}`);
-    if (data?.tokensIn || data?.tokensOut)
-      meta.push(`${data.tokensIn || 0}/${data.tokensOut || 0} tok`);
+    if (data?.model) meta.push(`Model: ${data.model}`);
+if (data?.tokensIn || data?.tokensOut) {
+  const sent = data.tokensIn || 0;
+  const received = data.tokensOut || 0;
+  meta.push(`Tokens Sent: ${sent} • Tokens Received: ${received}`);
+}
 
     box.innerHTML = `
       <div class="prose">

@@ -56,21 +56,22 @@ async function summarizeBlock({
   const system = `You are an expert summarizer. ${goal} summary. ${format}. Avoid fluff; keep key facts and context.`;
   const user   = `${title ? `Title: ${title}\n\n` : ""}Article:\n${text}`;
 
-  const isNano = model.includes("gpt-5-nano");
+  const isFive = model.includes("gpt-5");
 
   // --- Dynamic token scaling ---
   const lengthScale = { short: 500, medium: 1200, long: 2500 };
   const tokenLimit = lengthScale[length] || 1200;
 
   // --- Build API request body ---
-  const body = isNano
+  const body = isFive
     ? {
         model,
         input: [
           { role: "system", content: system },
           { role: "user", content: user }
         ],
-        max_output_tokens: tokenLimit
+        max_output_tokens: tokenLimit,
+        reasoning: { effort: "low" }
       }
     : {
         model,
@@ -82,7 +83,7 @@ async function summarizeBlock({
         max_tokens: tokenLimit
       };
 
-  const endpoint = isNano
+  const endpoint = isFive
     ? "https://api.openai.com/v1/responses"
     : "https://api.openai.com/v1/chat/completions";
 
@@ -104,7 +105,7 @@ async function summarizeBlock({
 
   // --- Universal extraction logic ---
   let content = "";
-  if (isNano) {
+  if (isFive) {
     const allText = [];
 
     // 1️⃣ Collect from any nested output content

@@ -17,12 +17,12 @@
   chrome.storage.local.get(
     {
       openai_api_key: "",
-      openai_model: "gpt-5-nano",
+      openai_model: "gpt-5-mini",
       max_summary_length: "medium"
     },
     cfg => {
       els.key.value = cfg.openai_api_key || "";
-      els.model.value = cfg.openai_model || "gpt-5-nano";
+      els.model.value = cfg.openai_model || "gpt-5-mini";
       els.length.value = cfg.max_summary_length || "medium";
     }
   );
