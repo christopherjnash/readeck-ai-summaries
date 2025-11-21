@@ -10,7 +10,7 @@ to generate concise, human-like summaries.
 - Open-source and easily auditable.
 
 🚀 Installation
-1. Download from the Chrome Web Store.
+1. Download from the [Chrome Web Store](https://chromewebstore.google.com/detail/readeck-ai-summaries/cmifjjnabkbkpakpephoohjmkmgjmkbf).
 2. Open the extension’s Options page and paste your OpenAI API key.
 3. Visit any article in Readeck → click “AI Summary”.
 
